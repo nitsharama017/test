@@ -1,65 +1,315 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy Node.js app to Azure Web App - theaisystem
-
+name: Azure Login Action Positive Test
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+  push:
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
-  build:
-    runs-on: windows-latest
+
+  BasicTest:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    environment: Automation test
 
     steps:
-      - uses: actions/checkout@v4
+    - name: 'Checking out repo code'
+      uses: actions/checkout@v4
 
-      - name: Set up Node.js version
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18.x'
+    - name: Set Node.js 18.x for GitHub Action
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18.x
 
-      - name: npm install, build, and test
-        run: |
-          npm install
-          npm run build --if-present
-          npm run test --if-present
-      
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
-        with:
-          name: node-app
-          path: .
+    - name: 'Validate build'
+      run: |
+        npm install
+        npm run build
+        
+    - name: 'Run L0 tests'
+      run: |
+        npm run test
 
-  deploy:
+    - name: Login with creds
+      uses: ./
+      with:
+        creds: ${{secrets.SP1}}
+        enable-AzPSSession: true
+
+    - name: Run Azure Cli
+      run: |
+        az account show --output none
+        az group show --name GitHubAction_CI_RG --output none
+        az vm list --output none
+
+    - name: Run Azure PowerShell
+      uses: azure/powershell@v2
+      with:
+        azPSVersion: "latest"
+        inlineScript: |
+            $checkResult = (Get-AzContext).Environment.Name -eq 'AzureCloud'
+            if(-not $checkResult){
+                throw "Not all checks passed!"
+            }
+
+    - name: Login with individual parameters
+      uses: ./
+      with:
+        client-id: ${{ secrets.SP1_CLIENT_ID }}
+        tenant-id: ${{ secrets.SP1_TENANT_ID }}
+        subscription-id: ${{ secrets.SP1_SUBSCRIPTION_ID }}
+        enable-AzPSSession: true
+
+    - name: Run Azure Cli again
+      run: |
+        az account show --output none
+
+    - name: Run Azure PowerShell again
+      uses: azure/powershell@v2
+      with:
+        azPSVersion: "latest"
+        inlineScript: |
+            $checkResult = (Get-AzContext).Environment.Name -eq 'AzureCloud'
+            if(-not $checkResult){
+                throw "Not all checks passed!"
+            }
+
+    - name: Login with explicit auth-type
+      uses: ./
+      with:
+        creds: ${{secrets.SP1}}
+        auth-type: SERVICE_PRINCIPAL
+        enable-AzPSSession: true
+
+    - name: Run Azure Cli
+      run: |
+        az account show --output none
+        az group show --name GitHubAction_CI_RG --output none
+        az vm list --output none
+
+    - name: Run Azure PowerShell
+      uses: azure/powershell@v2
+      with:
+        azPSVersion: "latest"
+        inlineScript: |
+            $checkResult = (Get-AzContext).Environment.Name -eq 'AzureCloud'
+            if(-not $checkResult){
+                throw "Not all checks passed!"
+            }
+
+  ParameterTest:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    environment: Automation test
+
+    steps:
+    - name: 'Checking out repo code'
+      uses: actions/checkout@v4
+
+    - name: Set Node.js 20.x for GitHub Action
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+
+    - name: 'Validate build'
+      run: |
+        npm install
+        npm run build
+
+    - name: Login with creds, disable ps session
+      uses: ./
+      with:
+        creds: ${{secrets.SP1}}
+        enable-AzPSSession: false
+
+    - name: Run Azure Cli 
+      run: |
+        az account show --output none
+        az group show --name GitHubAction_CI_RG --output none
+        az vm list --output none
+
+    - name: Login with creds, wrong boolean value
+      uses: ./
+      with:
+        creds: ${{secrets.SP1}}
+        enable-AzPSSession: notboolean
+
+    - name: Run Azure Cli 
+      run: |
+        az account show --output none
+        az group show --name GitHubAction_CI_RG --output none
+        az vm list --output none
+
+    - name: Login with creds, allow no subscription
+      uses: ./
+      with:
+        creds: ${{secrets.SP1}}
+        allow-no-subscriptions: true
+        enable-AzPSSession: true
+
+    - name: Run Azure Cli
+      run: |
+        az account show --output none
+        az group show --name GitHubAction_CI_RG --output none
+        az vm list --output none
+ 
+    - name: Run Azure PowerShell
+      uses: azure/powershell@v2
+      with:
+        azPSVersion: "latest"
+        inlineScript: |
+            $checkResult = (Get-AzContext).Environment.Name -eq 'AzureCloud'
+            if(-not $checkResult){
+                throw "Not all checks passed!"
+            }
+
+    - name: Login with individual parameters, allow no subscription
+      uses: ./
+      with:
+        client-id: ${{ secrets.SP1_CLIENT_ID }}
+        tenant-id: ${{ secrets.SP1_TENANT_ID}}
+        subscription-id: ${{ secrets.SP1_SUBSCRIPTION_ID }}
+        allow-no-subscriptions: true
+        enable-AzPSSession: true
+
+    - name: Run Azure Cli again
+      run: |
+        az account show --output none
+
+    - name: Run Azure PowerShell again
+      uses: azure/powershell@v2
+      with:
+        azPSVersion: "latest"
+        inlineScript: |
+            $checkResult = (Get-AzContext).Environment.Name -eq 'AzureCloud'
+            if(-not $checkResult){
+                throw "Not all checks passed!"
+            }
+
+    - name: Login with individual parameters, no subscription, allow no subscription
+      uses: ./
+      with:
+        client-id: ${{ secrets.OIDC_SP2_CLIENT_ID }}
+        tenant-id: ${{ secrets.OIDC_SP2_TENANT_ID }}
+        allow-no-subscriptions: true
+        enable-AzPSSession: true
+
+    - name: Run Azure Cli
+      shell: pwsh
+      run: |
+        $checkResult = (az account list --output json | ConvertFrom-Json).Count -eq 3
+        if(-not $checkResult){
+            throw "Not all checks passed!"
+        }
+
+    - name: Run Azure PowerShell
+      uses: azure/powershell@v2
+      with:
+        azPSVersion: "latest"
+        inlineScript: |
+            $checkResult = (Get-AzContext).Environment.Name -eq 'AzureCloud'
+            if(-not $checkResult){
+              throw "Not all checks passed!"
+            }
+
+    - name: Login with creds, no subscription, allow no subscription
+      uses: ./
+      with:
+        creds: '{"clientId":"${{ secrets.OIDC_SP2_CLIENT_ID }}","clientSecret":"${{ secrets.SP2_CLIENT_SECRET }}","tenantId":"${{ secrets.OIDC_SP2_TENANT_ID }}"}'
+        allow-no-subscriptions: true
+        enable-AzPSSession: true
+
+    - name: Run Azure Cli
+      run: |
+        az account show --output none
+
+    - name: Run Azure PowerShell
+      uses: azure/powershell@v2
+      with:
+        azPSVersion: "latest"
+        inlineScript: |
+            $checkResult = (Get-AzContext).Environment.Name -eq 'AzureCloud'
+            if(-not $checkResult){
+                throw "Not all checks passed!"
+            }
+
+  InDockerTest:
     runs-on: ubuntu-latest
-    needs: build
-    environment:
-      name: 'Production'
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
-    permissions:
-      id-token: write #This is required for requesting the JWT
-
+    container: ubuntu:24.04
+    environment: Automation test
     steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: node-app
-      
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_0BA6C3996D5A4835AE325AAB677C9997 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_CD6967DDCCE64D6291152844DD96120B }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_F575C3C155E74938A7263D0FD9287A3F }}
+    - name: 'Checking out repo code'
+      uses: actions/checkout@v4
 
-      - name: 'Deploy to Azure Web App'
-        uses: azure/webapps-deploy@v3
-        id: deploy-to-webapp
-        with:
-          app-name: 'theaisystem'
-          slot-name: 'Production'
-          package: .
-          
+    - name: Set Node.js 20.x for GitHub Action
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+      
+    - name: Install Azure CLI
+      run: |
+        apt-get update
+        apt-get install -y curl
+        curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+        
+    - name: Check Azure CLI Version
+      run: |
+        az --version
+
+    - name: Install Powershell
+      run: |
+        apt-get update
+        apt-get install -y wget
+        wget https://mirror.it.ubc.ca/ubuntu/pool/main/i/icu/libicu72_72.1-3ubuntu3_amd64.deb
+        dpkg -i libicu72_72.1-3ubuntu3_amd64.deb
+        wget https://github.com/PowerShell/PowerShell/releases/download/v7.4.3/powershell_7.4.3-1.deb_amd64.deb
+        dpkg -i powershell_7.4.3-1.deb_amd64.deb
+
+    - name: Check Powershell Version
+      shell: pwsh
+      run: |
+        $PSVersionTable
+
+    - name: Install Azure Powershell
+      shell: pwsh
+      run: |
+        Install-Module -Name Az -Repository PSGallery -Force
+
+    - name: Check Azure Powershell Version
+      shell: pwsh
+      run: |
+        Get-Module -ListAvailable Az
+
+    - name: 'Validate build'
+      run: |
+        npm install
+        npm run build
+        
+    - name: 'Run L0 tests'
+      run: |
+        npm run test
+
+    - name: Login with individual parameters
+      uses: ./
+      with:
+        client-id: ${{ secrets.SP1_CLIENT_ID }}
+        tenant-id: ${{ secrets.SP1_TENANT_ID }}
+        subscription-id: ${{ secrets.SP1_SUBSCRIPTION_ID }}
+        enable-AzPSSession: true
+
+    - name: Run Azure Cli again
+      run: |
+        az group list --output none
+
+    - name: Run Azure PowerShell again
+      uses: azure/powershell@v2
+      with:
+        azPSVersion: "latest"
+        inlineScript: |
+          $checkResult = Get-AzResourceGroup
